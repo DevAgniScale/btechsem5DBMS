@@ -3,6 +3,7 @@ from typing import TypedDict, Optional
 
 class AgentState(TypedDict, total=False):
     question: str
+    route: Optional[str]
     unit_no: Optional[int]
     unit_name: Optional[str]
     topic: Optional[str]
@@ -18,6 +19,7 @@ if __name__ == "__main__":
 
     sample: AgentState = {
         "question": "Explain paging.",
+        "route": "specific",
         "unit_no": 4,
         "unit_name": "Memory Management",
         "topic": "Paging and Segmentation",
@@ -28,7 +30,7 @@ if __name__ == "__main__":
     for k, v in sample.items():
         print(f"   {k}: {v}")
 
-    expected_keys = {"question", "unit_no", "unit_name", "topic", "related_pyqs", "answer"}
+    expected_keys = {"question", "route", "unit_no", "unit_name", "topic", "related_pyqs", "answer"}
     actual_keys = set(AgentState.__annotations__)
     print(f"\nExpected fields: {sorted(expected_keys)}")
     print(f"Actual fields:   {sorted(actual_keys)}")

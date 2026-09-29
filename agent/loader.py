@@ -26,7 +26,7 @@ def _parse_unit_no(raw: str) -> int:
 
 
 def load_units() -> dict:
-    """Returns {unit_no: {"name": str, "topics": {topic: [{"question", "year"}]}}}"""
+    """Returns {unit_no: {"name": str, "topics": {topic: [{"question", "year"}]}}} for unit_*.md files."""
     units = {}
     for path in sorted(config.DATA_DIR.glob("unit_*.md")):
         unit_no, topic = None, None
@@ -35,10 +35,10 @@ def load_units() -> dict:
             if m := UNIT_RE.match(line):
                 unit_no = _parse_unit_no(m.group(1))
                 units[unit_no] = {"name": m.group(2).strip(), "topics": {}}
-            elif (m := TOPIC_RE.match(line)) and unit_no:
+            elif (m := TOPIC_RE.match(line)) and unit_no is not None:
                 topic = m.group(1).strip()
                 units[unit_no]["topics"][topic] = []
-            elif unit_no and topic:
+            elif unit_no is not None and topic:
                 if m := PYQ_FORMAT1_RE.match(line):
                     year = m.group(1).strip()
                     question = m.group(2).strip()
@@ -48,6 +48,14 @@ def load_units() -> dict:
                     year = (m.group(2) or "").strip()
                     units[unit_no]["topics"][topic].append({"question": question, "year": year})
     return units
+
+
+def load_helper() -> str:
+    """Returns the text content of data/helper.md."""
+    helper_path = config.DATA_DIR / "helper.md"
+    if helper_path.exists():
+        return helper_path.read_text(encoding="utf-8")
+    return ""
 
 
 if __name__ == "__main__":

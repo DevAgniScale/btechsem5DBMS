@@ -1,12 +1,14 @@
+from typing import Literal
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 import config
-from .loader import load_units
-from .prompts import UNIT_PROMPT, TOPIC_AND_PYQ_PROMPT, ANSWER_PROMPT
+from .loader import load_units, load_helper
+from .prompts import ROUTER_PROMPT, HELPER_PROMPT, UNIT_PROMPT, TOPIC_AND_PYQ_PROMPT, ANSWER_PROMPT
 from .state import AgentState
 
 UNITS = load_units()
+HELPER_TEXT = load_helper()
 
 
 def _get_llm():
@@ -17,13 +19,66 @@ def _get_llm():
     )
 
 
+class RouteDecision(BaseModel):
+    route: Literal["generic", "specific", "unrelated"] = Field(
+        description="Classify as 'generic' for broad DBMS advice/strategies/important topics/timeframes, 'specific' for specific syllabus questions/concepts, or 'unrelated' for non-DBMS queries"
+    )
+
+
 class UnitDecision(BaseModel):
-    unit_no: int = Field(description="The unit number (e.g. 1, 2, 3...) that best fits the question, or 0 if none fit")
+    unit_no: int = Field(description="The unit number (1, 2, 3, 4, 5) that best fits the question, or -1 if none fit")
 
 
 class TopicAndPyqDecision(BaseModel):
     topic: str = Field(description="The exact topic name as listed in the unit content, or empty string if none")
     pyq_ids: list[str] = Field(default_factory=list, description="List of PYQ IDs (e.g. ['P1', 'P2']) relevant to the question")
+
+
+def route_question(state: AgentState) -> dict:
+    """Classifies the question as generic advice, specific syllabus concept, or unrelated."""
+    syllabus_lines = []
+    for u_no, u_data in sorted(UNITS.items()):
+        syllabus_lines.append(f"Unit {u_no}: {u_data['name']}")
+        for t in u_data["topics"]:
+            syllabus_lines.append(f"   - {t}")
+        syllabus_lines.append("")
+    syllabus_text = "\n".join(syllabus_lines)
+
+    prompt = ROUTER_PROMPT.format(syllabus=syllabus_text, question=state["question"])
+    llm = _get_llm()
+    structured_llm = llm.with_structured_output(RouteDecision)
+    decision: RouteDecision = structured_llm.invoke(prompt)
+
+    return {"route": decision.route}
+
+
+def handle_helper(state: AgentState) -> dict:
+    """Answers broad preparation, study strategy, and important topic questions using helper.md."""
+    helper_content = load_helper() or HELPER_TEXT
+    prompt = HELPER_PROMPT.format(
+        helper_content=helper_content,
+        question=state["question"],
+    )
+    llm = _get_llm()
+    res = llm.invoke(prompt)
+    if isinstance(res.content, str):
+        answer = res.content
+    elif isinstance(res.content, list):
+        text_parts = [
+            item if isinstance(item, str) else item.get("text", str(item)) if isinstance(item, dict) else str(item)
+            for item in res.content
+        ]
+        answer = "".join(text_parts)
+    else:
+        answer = str(res.content)
+
+    return {
+        "unit_no": 0,
+        "unit_name": "General DBMS Exam Guide & Strategy",
+        "topic": "Important Topics & Strategic Preparation",
+        "related_pyqs": [],
+        "answer": answer,
+    }
 
 
 def identify_unit(state: AgentState) -> dict:
@@ -54,7 +109,7 @@ def identify_unit(state: AgentState) -> dict:
 def analyze_unit(state: AgentState) -> dict:
     """Picks the matching topic and finds related PYQs from the identified unit."""
     unit_no = state.get("unit_no")
-    if not unit_no or unit_no not in UNITS:
+    if unit_no is None or unit_no not in UNITS:
         return {"topic": None, "related_pyqs": []}
 
     unit_data = UNITS[unit_no]
@@ -116,14 +171,10 @@ def generate_answer(state: AgentState) -> dict:
     if isinstance(res.content, str):
         answer = res.content
     elif isinstance(res.content, list):
-        text_parts = []
-        for item in res.content:
-            if isinstance(item, str):
-                text_parts.append(item)
-            elif isinstance(item, dict) and "text" in item:
-                text_parts.append(item["text"])
-            else:
-                text_parts.append(str(item))
+        text_parts = [
+            item if isinstance(item, str) else item.get("text", str(item)) if isinstance(item, dict) else str(item)
+            for item in res.content
+        ]
         answer = "".join(text_parts)
     else:
         answer = str(res.content)
@@ -147,4 +198,5 @@ if __name__ == "__main__":
     print(f"Loaded {len(UNITS)} units for nodes.")
     for u_no, u in UNITS.items():
         print(f"  - Unit {u_no}: {u['name']} ({len(u['topics'])} topics)")
+    print(f"\nLoaded helper.md content length: {len(HELPER_TEXT)} chars.")
     print("\nSUCCESS: agent/nodes.py loaded successfully.")

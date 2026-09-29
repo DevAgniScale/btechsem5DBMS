@@ -34,17 +34,23 @@ def format_reply(result: dict) -> str:
     if not result.get("topic"):
         return result["answer"]
 
-    parts = [
-        f"**Unit {result['unit_no']}: {result['unit_name']}**",
-        f"**Topic:** {result['topic']}",
-        "",
-        result["answer"],
-        "",
-        "**Related PYQs on this topic:**",
-    ]
-    for i, p in enumerate(result["related_pyqs"], 1):
-        year = f" ({p['year']})" if p["year"] else ""
-        parts.append(f"{i}. {p['question']}{year}")
+    parts = []
+    if result.get("unit_name"):
+        if result.get("unit_no") and result["unit_no"] > 0:
+            parts.append(f"**Unit {result['unit_no']}: {result['unit_name']}**")
+            parts.append(f"**Topic:** {result['topic']}")
+        else:
+            parts.append(f"**📚 {result['unit_name']}**")
+    parts.append("")
+    parts.append(result["answer"])
+
+    if result.get("related_pyqs"):
+        parts.append("")
+        parts.append("**Related PYQs on this topic:**")
+        for i, p in enumerate(result["related_pyqs"], 1):
+            year = f" ({p['year']})" if p.get("year") else ""
+            parts.append(f"{i}. {p['question']}{year}")
+
     return "\n".join(parts)
 
 
@@ -130,6 +136,21 @@ if __name__ == "__main__":
             and sum(len(p) for p in parts) == 4200
         )
         print("\nSUCCESS: bot.py helper functions work correctly." if ok else "\nFAILED: output did not match expectations.")
+    elif len(sys.argv) > 1:
+        # Direct CLI prompt mode:
+        #     python bot.py "What are the imp topics?"
+        import asyncio
+        custom_question = " ".join(sys.argv[1:]).strip()
+
+        async def _run_cli():
+            print(f"\n📩 Question: {custom_question}")
+            print("-" * 60)
+            result = await graph.ainvoke({"question": custom_question})
+            reply_text = format_reply(result)
+            print(reply_text)
+            print("-" * 60 + "\n")
+
+        asyncio.run(_run_cli())
     else:
         if not DISCORD_TOKEN or DISCORD_TOKEN == "your_discord_bot_token":
             print("\n❌ ERROR: DISCORD_TOKEN is not set in your .env file!")

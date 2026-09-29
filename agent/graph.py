@@ -1,11 +1,20 @@
 from langgraph.graph import StateGraph, START, END
 
 from .state import AgentState
-from .nodes import identify_unit, analyze_unit, generate_answer, not_found
+from .nodes import route_question, handle_helper, identify_unit, analyze_unit, generate_answer, not_found
+
+
+def _route_condition(state: AgentState) -> str:
+    route = state.get("route")
+    if route == "generic":
+        return "handle_helper"
+    elif route == "specific":
+        return "identify_unit"
+    return "not_found"
 
 
 def _after_unit(state: AgentState) -> str:
-    return "analyze_unit" if state.get("unit_no") else "not_found"
+    return "analyze_unit" if state.get("unit_no") is not None else "not_found"
 
 
 def _after_analysis(state: AgentState) -> str:
@@ -15,14 +24,30 @@ def _after_analysis(state: AgentState) -> str:
 def build_graph():
     g = StateGraph(AgentState)
 
+    g.add_node("route_question", route_question)
+    g.add_node("handle_helper", handle_helper)
     g.add_node("identify_unit", identify_unit)
     g.add_node("analyze_unit", analyze_unit)
     g.add_node("generate_answer", generate_answer)
     g.add_node("not_found", not_found)
 
-    g.add_edge(START, "identify_unit")
-    g.add_conditional_edges("identify_unit", _after_unit, ["analyze_unit", "not_found"])
-    g.add_conditional_edges("analyze_unit", _after_analysis, ["generate_answer", "not_found"])
+    g.add_edge(START, "route_question")
+    g.add_conditional_edges(
+        "route_question",
+        _route_condition,
+        {"handle_helper": "handle_helper", "identify_unit": "identify_unit", "not_found": "not_found"},
+    )
+    g.add_edge("handle_helper", END)
+    g.add_conditional_edges(
+        "identify_unit",
+        _after_unit,
+        {"analyze_unit": "analyze_unit", "not_found": "not_found"},
+    )
+    g.add_conditional_edges(
+        "analyze_unit",
+        _after_analysis,
+        {"generate_answer": "generate_answer", "not_found": "not_found"},
+    )
     g.add_edge("generate_answer", END)
     g.add_edge("not_found", END)
 
