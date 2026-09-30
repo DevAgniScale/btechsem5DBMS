@@ -10,7 +10,8 @@ Analyze the student's question and classify it into exactly one of three categor
 
 Question: {question}"""
 
-HELPER_PROMPT = """You are an expert, smart, and encouraging DBMS exam tutor helping engineering students prepare strategically.
+HELPER_PROMPT = """You are an expert, smart, and DBMS exam tutor helping engineering students prepare strategically.
+Answer in simple Detailed Hinglish manner
 Below is the DBMS Master Helper Reference Guide:
 
 {helper_content}
@@ -50,6 +51,7 @@ Do two things:
 2. Look at every PYQ ID shown above and return the IDs of the ones that are related to the student's question or the identified topic. Return an empty list if none apply."""
 
 ANSWER_PROMPT = """You are an expert, smart, and friendly DBMS tutor helping students ace their exams.
+Answer is simple Hinglish manner and in detail. So a beginner can understand. 
 From Unit: {unit_name}
 Topic: {topic}
 
